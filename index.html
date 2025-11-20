@@ -3,17 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FocusType: 200 Common Words</title>
+    <title>FocusType: PK Mode</title>
     <style>
         :root {
-            --bg-color: #f0f4f8;
+            --bg-color: #f3f4f6;
             --card-bg: #ffffff;
-            --text-main: #333;
-            --text-sub: #666;
-            --highlight: #3b82f6; /* Blue */
+            --text-main: #1f2937;
+            --text-sub: #6b7280;
+            --highlight: #3b82f6; /* User Blue */
             --correct: #10b981;   /* Green */
             --error: #ef4444;     /* Red */
-            --current-bg: #eef2ff;
+            --bot-1: #f59e0b;     /* Amber */
+            --bot-2: #8b5cf6;     /* Purple */
+            --bot-3: #ec4899;     /* Pink */
         }
 
         * { box-sizing: border-box; }
@@ -25,40 +27,105 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             min-height: 100vh;
             margin: 0;
             padding: 20px;
         }
 
-        h1 { margin-bottom: 10px; font-weight: 600; }
-        p.subtitle { margin-top: 0; color: var(--text-sub); margin-bottom: 30px; }
+        h1 { margin-bottom: 5px; font-weight: 700; color: #111; }
+        p.subtitle { margin-top: 0; color: var(--text-sub); margin-bottom: 20px; font-size: 0.9rem; }
 
-        /* Main Container */
-        .container {
-            background: var(--card-bg);
+        /* Main Layout */
+        .wrapper {
             width: 100%;
-            max-width: 800px;
-            padding: 40px;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* --- PK Race Track Section --- */
+        .race-track {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .race-lane {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .race-lane:last-child { margin-bottom: 0; }
+
+        .lane-label {
+            width: 80px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            text-align: right;
+            margin-right: 15px;
+            color: var(--text-sub);
+        }
+        
+        .lane-bar-bg {
+            flex-grow: 1;
+            height: 12px;
+            background-color: #e5e7eb;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .lane-progress {
+            height: 100%;
+            width: 0%;
+            border-radius: 6px;
+            transition: width 0.3s ease-out; /* Smooth transition for visual updates */
+            position: relative;
+        }
+
+        /* Specific Colors */
+        .user-lane .lane-progress { background-color: var(--highlight); }
+        .bot1-lane .lane-progress { background-color: var(--bot-1); }
+        .bot2-lane .lane-progress { background-color: var(--bot-2); }
+        .bot3-lane .lane-progress { background-color: var(--bot-3); }
+        
+        .user-lane .lane-label { color: var(--highlight); font-weight: 800; }
+
+        /* Rank Badges */
+        .rank-badge {
+            position: absolute;
+            right: 5px;
+            top: -2px;
+            font-size: 10px;
+            color: white;
+            font-weight: bold;
+            opacity: 0;
+        }
+        .finished .rank-badge { opacity: 1; }
+
+        /* --- Typing Area --- */
+        .typing-area {
+            background: var(--card-bg);
+            padding: 30px;
             border-radius: 12px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.05);
             text-align: center;
             position: relative;
         }
 
-        /* Stats Bar (Live) */
         .live-stats {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             font-size: 0.9rem;
             color: var(--text-sub);
             font-weight: bold;
         }
 
-        /* Word Display Area */
         .word-box {
-            height: 140px; /* Shows about 3 lines */
+            height: 130px;
             overflow: hidden;
             border: 2px solid #e5e7eb;
             border-radius: 8px;
@@ -69,29 +136,26 @@
             align-content: flex-start;
             line-height: 2.5rem;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 1.5rem;
-            position: relative;
+            font-size: 1.4rem;
             cursor: text;
+            background: #fafafa;
         }
 
         .word {
             margin-right: 12px;
             padding: 2px 5px;
             border-radius: 4px;
-            color: #888;
-            transition: all 0.1s;
+            color: #9ca3af;
         }
 
         .word.active {
-            background-color: var(--current-bg);
+            background-color: #e0e7ff;
             color: var(--text-main);
             border-bottom: 2px solid var(--highlight);
         }
-
         .word.correct { color: var(--correct); }
         .word.incorrect { color: var(--error); text-decoration: line-through; }
 
-        /* Input Styling */
         input#type-input {
             width: 100%;
             padding: 15px;
@@ -102,42 +166,49 @@
             transition: border-color 0.2s;
             font-family: 'Courier New', Courier, monospace;
         }
-
         input#type-input:focus { border-color: var(--highlight); }
         input#type-input.input-error { background-color: #fef2f2; border-color: var(--error); }
 
-        /* Overlay for Results */
+        /* --- Modal --- */
         .modal-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.95);
+            background: rgba(255,255,255,0.98);
             border-radius: 12px;
-            display: none; /* Hidden by default */
+            display: none;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             z-index: 10;
         }
-
         .modal-overlay.visible { display: flex; }
+
+        .rank-display {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            font-weight: 800;
+            color: var(--highlight);
+        }
 
         .stats-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            gap: 15px;
             margin: 20px 0;
             text-align: left;
+            width: 100%;
+            max-width: 400px;
         }
 
         .stat-item {
             background: #f8fafc;
-            padding: 15px;
+            padding: 12px;
             border-radius: 8px;
-            border-left: 4px solid var(--highlight);
+            border-left: 4px solid #ccc;
         }
         
-        .stat-value { font-size: 1.5rem; font-weight: bold; display: block; }
-        .stat-label { font-size: 0.85rem; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 1.4rem; font-weight: bold; display: block; }
+        .stat-label { font-size: 0.75rem; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
 
         button.btn-restart {
             background-color: var(--highlight);
@@ -149,62 +220,85 @@
             cursor: pointer;
             font-weight: bold;
             transition: background 0.2s;
+            margin-top: 10px;
         }
-
         button.btn-restart:hover { background-color: #2563eb; }
 
     </style>
 </head>
 <body>
 
-    <h1>FocusType</h1>
-    <p class="subtitle">Type the 40 words below as fast as you can.</p>
-
-    <div class="container">
-        
-        <div class="live-stats">
-            <span id="progress-text">0 / 40</span>
-            <span id="timer-text">00:00</span>
+    <div class="wrapper">
+        <div style="text-align: center;">
+            <h1>FocusType <span style="color:var(--error)">PK</span></h1>
+            <p class="subtitle">Race against adaptive AI. Top 200 common words (6-10 letters).</p>
         </div>
 
-        <div class="word-box" id="word-box" onclick="document.getElementById('type-input').focus()">
+        <div class="race-track">
+            <div class="race-lane user-lane">
+                <div class="lane-label">YOU</div>
+                <div class="lane-bar-bg">
+                    <div class="lane-progress" id="prog-user" style="width: 0%"></div>
+                </div>
             </div>
+            <div class="race-lane bot1-lane">
+                <div class="lane-label">Rookie</div>
+                <div class="lane-bar-bg">
+                    <div class="lane-progress" id="prog-bot1" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="race-lane bot2-lane">
+                <div class="lane-label">Average</div>
+                <div class="lane-bar-bg">
+                    <div class="lane-progress" id="prog-bot2" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="race-lane bot3-lane">
+                <div class="lane-label">Pro</div>
+                <div class="lane-bar-bg">
+                    <div class="lane-progress" id="prog-bot3" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
 
-        <input type="text" id="type-input" placeholder="Type here..." autocomplete="off" spellcheck="false">
-
-        <div id="results-modal" class="modal-overlay">
-            <h2>Session Complete!</h2>
+        <div class="typing-area">
             
-            <div class="stats-grid">
-                <div class="stat-item" style="border-color: var(--highlight);">
-                    <span class="stat-value" id="res-wpm">0</span>
-                    <span class="stat-label">WPM</span>
-                </div>
-                <div class="stat-item" style="border-color: var(--correct);">
-                    <span class="stat-value" id="res-accuracy">0%</span>
-                    <span class="stat-label">Accuracy</span>
-                </div>
-                <div class="stat-item" style="border-color: #8b5cf6;">
-                    <span class="stat-value" id="res-time">0s</span>
-                    <span class="stat-label">Total Time</span>
-                </div>
-                <div class="stat-item" style="border-color: var(--error);">
-                    <span class="stat-value" id="res-mistakes">0</span>
-                    <span class="stat-label">Total Typos</span>
-                </div>
-                <div class="stat-item" style="border-color: #f59e0b;">
-                    <span class="stat-value" id="res-corrected">0</span>
-                    <span class="stat-label">Corrected Words</span>
-                </div>
-                <div class="stat-item" style="border-color: #ef4444;">
-                    <span class="stat-value" id="res-uncorrected">0</span>
-                    <span class="stat-label">Uncorrected Words</span>
-                </div>
+            <div class="live-stats">
+                <span id="progress-text">0 / 40</span>
+                <span id="timer-text">00:00</span>
             </div>
 
-            <button class="btn-restart" onclick="initGame()">Start New Session</button>
-        </div>
+            <div class="word-box" id="word-box" onclick="document.getElementById('type-input').focus()">
+                </div>
 
+            <input type="text" id="type-input" placeholder="Type here to start..." autocomplete="off" spellcheck="false">
+
+            <div id="results-modal" class="modal-overlay">
+                <div class="rank-display" id="res-rank">Rank #1</div>
+                <div style="color:var(--text-sub); margin-bottom:10px;">Match vs AI (Based on your past speed)</div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item" style="border-color: var(--highlight);">
+                        <span class="stat-value" id="res-wpm">0</span>
+                        <span class="stat-label">Your WPM</span>
+                    </div>
+                    <div class="stat-item" style="border-color: var(--correct);">
+                        <span class="stat-value" id="res-accuracy">0%</span>
+                        <span class="stat-label">Accuracy</span>
+                    </div>
+                    <div class="stat-item" style="border-color: #f59e0b;">
+                        <span class="stat-value" id="res-mistakes">0</span>
+                        <span class="stat-label">Typos</span>
+                    </div>
+                    <div class="stat-item" style="border-color: #8b5cf6;">
+                        <span class="stat-value" id="res-time">0s</span>
+                        <span class="stat-label">Time</span>
+                    </div>
+                </div>
+
+                <button class="btn-restart" onclick="initGame()">Rematch</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -245,56 +339,73 @@
         let currentIndex = 0;
         let startTime = null;
         let timerInterval = null;
+        let gameActive = false;
         
-        // Stats Counters
+        // User Stats
         let totalKeystrokes = 0; 
-        let totalMistakes = 0; // Total times a wrong key was pressed
-        let uncorrectedWords = 0; // Words submitted incorrectly
-        let correctedWordCount = 0; // Words with typos but submitted correctly
-        let currentWordHasTypo = false; // Flag for the current active word
+        let totalMistakes = 0; 
+        
+        // Bot State
+        let bots = []; // Array of bot objects
+        let botTimers = []; // Array of timeout IDs
+        
+        // Persistent Speed Memory
+        const DEFAULT_WPM = 40;
+        function getStoredWPM() {
+            const val = localStorage.getItem('pkType_lastWPM');
+            return val ? parseInt(val, 10) : DEFAULT_WPM;
+        }
+        function setStoredWPM(wpm) {
+            localStorage.setItem('pkType_lastWPM', wpm);
+        }
 
-        // Elements
+        // DOM Elements
         const wordBox = document.getElementById('word-box');
         const inputField = document.getElementById('type-input');
         const progressText = document.getElementById('progress-text');
         const timerText = document.getElementById('timer-text');
         const modal = document.getElementById('results-modal');
+        
+        const barUser = document.getElementById('prog-user');
+        const barBot1 = document.getElementById('prog-bot1');
+        const barBot2 = document.getElementById('prog-bot2');
+        const barBot3 = document.getElementById('prog-bot3');
 
-        // --- 3. Functions ---
+        // --- 3. Logic ---
 
         function shuffle(array) {
-            let currentIndex = array.length, randomIndex;
             const arrCopy = [...array];
-            while (currentIndex != 0) {
-                randomIndex = Math.floor(Math.random() * currentIndex);
-                currentIndex--;
-                [arrCopy[currentIndex], arrCopy[randomIndex]] = [arrCopy[randomIndex], arrCopy[currentIndex]];
+            for (let i = arrCopy.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arrCopy[i], arrCopy[j]] = [arrCopy[j], arrCopy[i]];
             }
             return arrCopy;
         }
 
         function initGame() {
-            // Reset State
+            // 1. Reset Data
             currentWords = shuffle(wordPool).slice(0, SESSION_LENGTH);
             currentIndex = 0;
             startTime = null;
             totalKeystrokes = 0;
             totalMistakes = 0;
-            uncorrectedWords = 0;
-            correctedWordCount = 0;
-            currentWordHasTypo = false;
-
-            // UI Reset
+            gameActive = false;
+            
+            if(timerInterval) clearInterval(timerInterval);
+            
+            // 2. Reset UI
             inputField.value = '';
             inputField.disabled = false;
             inputField.focus();
+            inputField.classList.remove('input-error');
             modal.classList.remove('visible');
             progressText.innerText = `0 / ${SESSION_LENGTH}`;
             timerText.innerText = "00:00";
-            
-            if(timerInterval) clearInterval(timerInterval);
 
-            // Render Words
+            // Reset Bars
+            [barUser, barBot1, barBot2, barBot3].forEach(b => b.style.width = '0%');
+
+            // 3. Render Words
             wordBox.innerHTML = '';
             currentWords.forEach((word, index) => {
                 const span = document.createElement('span');
@@ -303,9 +414,77 @@
                 if (index === 0) span.classList.add('active');
                 wordBox.appendChild(span);
             });
-            
-            // Scroll to top
             wordBox.scrollTop = 0;
+
+            // 4. Setup Bots (But don't start yet)
+            setupBots();
+        }
+
+        // --- Bot Logic ---
+        function setupBots() {
+            // Clear existing bot timers
+            botTimers.forEach(t => clearTimeout(t));
+            botTimers = [];
+
+            const userBaseWPM = getStoredWPM();
+            
+            // Configure 3 Bots
+            bots = [
+                { id: 'bot1', element: barBot1, wpm: Math.max(15, Math.floor(userBaseWPM * 0.7)), progress: 0, finished: false },
+                { id: 'bot2', element: barBot2, wpm: Math.floor(userBaseWPM * 0.95), progress: 0, finished: false },
+                { id: 'bot3', element: barBot3, wpm: Math.floor(userBaseWPM * 1.15), progress: 0, finished: false }
+            ];
+        }
+
+        function startBots() {
+            bots.forEach((bot, index) => {
+                scheduleNextBotWord(index);
+            });
+        }
+
+        function scheduleNextBotWord(botIndex) {
+            if (!gameActive) return;
+            
+            const bot = bots[botIndex];
+            if (bot.progress >= SESSION_LENGTH) {
+                bot.finished = true;
+                return;
+            }
+
+            // Calculate base delay per word (ms) based on WPM
+            // WPM = words per minute. Delay = 60000 / WPM
+            let baseDelay = 60000 / bot.wpm;
+            
+            // Add Non-linear Variance (Randomness 0.7x to 1.3x)
+            let variance = (Math.random() * 0.6) + 0.7; 
+            let actualDelay = baseDelay * variance;
+
+            // Simulate "Stumble" (10% chance to pause longer)
+            if (Math.random() < 0.10) {
+                actualDelay += 1500; // Add 1.5s penalty
+            }
+
+            const timerId = setTimeout(() => {
+                if (!gameActive) return;
+                
+                // Update Bot Progress
+                bot.progress++;
+                const pct = (bot.progress / SESSION_LENGTH) * 100;
+                bot.element.style.width = `${pct}%`;
+
+                // Schedule next
+                scheduleNextBotWord(botIndex);
+
+            }, actualDelay);
+
+            botTimers.push(timerId);
+        }
+
+        function startGameLogic() {
+            gameActive = true;
+            startTime = new Date();
+            timerInterval = setInterval(updateTimer, 1000);
+            startBots();
         }
 
         function updateTimer() {
@@ -317,30 +496,58 @@
         }
 
         function finishGame() {
+            gameActive = false; // Stops bots
             clearInterval(timerInterval);
+            botTimers.forEach(t => clearTimeout(t));
+
             const endTime = new Date();
             const timeInMinutes = (endTime - startTime) / 60000;
             const timeInSeconds = (endTime - startTime) / 1000;
 
-            // WPM Calculation: (Total Chars / 5) / Minutes
-            // We count spaces as characters too for standard WPM, so we add session length (spaces)
+            // Stats Calc
+            // Standard WPM = (Total Chars including spaces) / 5 / Minutes
+            // Estimated Chars = sum of word lengths + spaces
             const totalChars = currentWords.join('').length + SESSION_LENGTH;
             const wpm = Math.round((totalChars / 5) / timeInMinutes);
-            
-            // Accuracy: Correct Keystrokes / Total Keystrokes (Simple approximation)
-            // Or: (Total Keystrokes - Total Mistakes) / Total Keystrokes
+            const safeWPM = isFinite(wpm) ? wpm : 0;
+
+            // Accuracy
             let accuracy = 0;
             if(totalKeystrokes > 0) {
                 accuracy = Math.max(0, Math.round(((totalKeystrokes - totalMistakes) / totalKeystrokes) * 100));
             }
 
-            // Fill Stats
-            document.getElementById('res-wpm').innerText = isFinite(wpm) ? wpm : 0;
+            // Save WPM for next time (Weighted average to smooth transitions)
+            const previousAvg = getStoredWPM();
+            // New average = 70% old + 30% new (prevents one lucky game from ruining next difficulty)
+            const newAvg = Math.round((previousAvg * 0.7) + (safeWPM * 0.3));
+            setStoredWPM(newAvg > 10 ? newAvg : 10);
+
+            // Calculate Rank
+            // How many bots finished? Or simulate where they are?
+            // Since we stop them when user finishes, we compare progress.
+            // If Bot Progress == 40, they beat user. 
+            // If Bot Progress < 40, user beat them.
+            let rank = 1;
+            bots.forEach(bot => {
+                if (bot.progress >= SESSION_LENGTH) rank++;
+            });
+
+            // Fill UI
+            let rankText = "";
+            let color = "#333";
+            if(rank === 1) { rankText = "1st Place! 🏆"; color = "var(--correct)"; }
+            else if(rank === 2) { rankText = "2nd Place 🥈"; color = "var(--highlight)"; }
+            else if(rank === 3) { rankText = "3rd Place 🥉"; color = "#f59e0b"; }
+            else { rankText = "4th Place 🐢"; color = "var(--error)"; }
+
+            document.getElementById('res-rank').innerText = rankText;
+            document.getElementById('res-rank').style.color = color;
+            
+            document.getElementById('res-wpm').innerText = safeWPM;
             document.getElementById('res-accuracy').innerText = accuracy + "%";
             document.getElementById('res-time').innerText = timeInSeconds.toFixed(1) + "s";
             document.getElementById('res-mistakes').innerText = totalMistakes;
-            document.getElementById('res-corrected').innerText = correctedWordCount;
-            document.getElementById('res-uncorrected').innerText = uncorrectedWords;
 
             inputField.disabled = true;
             modal.classList.add('visible');
@@ -349,80 +556,66 @@
         // --- 4. Event Listeners ---
 
         inputField.addEventListener('input', (e) => {
-            if (!startTime) {
-                startTime = new Date();
-                timerInterval = setInterval(updateTimer, 1000);
+            // Start on first input
+            if (!startTime && e.target.value.length > 0) {
+                startGameLogic();
             }
 
             const typed = e.target.value;
             const targetWord = currentWords[currentIndex];
             
-            // Only count alphanumeric inputs as keystrokes to avoid skewing stats with control keys
-            // Simplification: We increment per input event (character added or removed)
-            // Ideally, we want to detect if a char was ADDED.
-            // For simplicity, we assume strict growth for keystroke count? No, backspace counts too.
-            totalKeystrokes++; 
+            totalKeystrokes++; // Crude count
 
-            // Check correctness of current prefix
             if (targetWord.startsWith(typed.trim())) {
                 inputField.classList.remove('input-error');
             } else {
                 inputField.classList.add('input-error');
                 totalMistakes++;
-                currentWordHasTypo = true;
             }
         });
 
         inputField.addEventListener('keydown', (e) => {
-            // Handle Spacebar
             if (e.code === 'Space') {
-                e.preventDefault(); // Prevent actual space character
-                
+                e.preventDefault(); 
+                if (!startTime) return; // Don't allow space before start
+
                 const typedValue = inputField.value.trim();
                 const targetWord = currentWords[currentIndex];
                 const wordSpans = document.querySelectorAll('.word');
-                const currentSpan = wordSpans[currentIndex];
-
+                
                 if (typedValue.length > 0) {
-                    // Logic for Correct/Incorrect submission
+                    // Check Word
                     if (typedValue === targetWord) {
-                        currentSpan.classList.add('correct');
-                        currentSpan.classList.remove('active');
-                        
-                        if (currentWordHasTypo) {
-                            correctedWordCount++;
-                        }
+                        wordSpans[currentIndex].classList.add('correct');
+                        wordSpans[currentIndex].classList.remove('active');
                     } else {
-                        currentSpan.classList.add('incorrect');
-                        currentSpan.classList.remove('active');
-                        uncorrectedWords++;
+                        wordSpans[currentIndex].classList.add('incorrect');
+                        wordSpans[currentIndex].classList.remove('active');
                     }
 
-                    // Move to next word
+                    // Update User Progress Bar
                     currentIndex++;
+                    const userPct = (currentIndex / SESSION_LENGTH) * 100;
+                    barUser.style.width = `${userPct}%`;
                     progressText.innerText = `${currentIndex} / ${SESSION_LENGTH}`;
+
+                    // Reset Input
                     inputField.value = '';
                     inputField.classList.remove('input-error');
-                    currentWordHasTypo = false;
 
-                    // Check if game over
+                    // Check End
                     if (currentIndex >= SESSION_LENGTH) {
                         finishGame();
                     } else {
-                        // Highlight next word
+                        // Next Word
                         const nextSpan = wordSpans[currentIndex];
                         nextSpan.classList.add('active');
-                        
-                        // Auto-scroll logic
-                        // If the next word is on a lower line relative to the container...
-                        // Simplest way: scrollIntoView
                         nextSpan.scrollIntoView({ behavior: "smooth", block: "center" });
                     }
                 }
             }
         });
 
-        // Initialize on load
         window.onload = initGame;
 
     </script>
