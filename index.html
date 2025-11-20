@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>小朋友下樓梯 - 強制 60FPS 版</title>
+    <title>小朋友下樓梯 - 手感優化+穩定鎖幀版</title>
     <style>
         body {
             margin: 0;
@@ -167,9 +167,8 @@
 
         <div id="start-screen">
             <h1>小朋友下樓梯</h1>
-            <p><b>電腦：</b>方向鍵 或 WASD</p>
-            <p><b>手機：</b>點擊下方左右按鈕</p>
-            <p>不要碰頂部尖刺，不要掉落深淵</p>
+            <p><b>完美版：</b>優化手感 + 強制 60FPS</p>
+            <p>按鈕 / 鍵盤左右移動</p>
             <button onclick="startGame()">開始遊戲</button>
         </div>
 
@@ -188,7 +187,6 @@
         const startScreen = document.getElementById('start-screen');
         const gameOverScreen = document.getElementById('game-over-screen');
         const speedDisplay = document.getElementById('speed-display');
-        
         const btnLeft = document.getElementById('btn-left');
         const btnRight = document.getElementById('btn-right');
 
@@ -196,15 +194,25 @@
         let isGameOver = false;
         let score = 0;
         let frames = 0;
-        let gameSpeed = 2;
+        
+        // --- FPS 與物理參數 ---
+        // 使用您指定的優化參數
+        let gameSpeed = 1.5; 
+        const GRAVITY = 0.25; 
+        const MOVE_SPEED = 4; 
+        const JUMP_FORCE = -6.5; 
+
+        // --- 時間累加器變數 (最穩定的 FPS 鎖定法) ---
+        let lastTime = 0;
+        let accumulator = 0;
+        const TIME_STEP = 1000 / 60; // 強制物理每 16.66ms 跑一次
         
         const keys = { left: false, right: false };
 
-        // 原始參數 (未調整速度)
         const player = {
             x: 200, y: 100, width: 20, height: 30,
-            vx: 0, vy: 0, speed: 5, jumpForce: -8,
-            gravity: 0.4, color: '#3498db', onGround: false
+            vx: 0, vy: 0, 
+            color: '#3498db', onGround: false
         };
 
         let platforms = [];
@@ -233,16 +241,16 @@
             if (type === 'jump') {
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(300, now);
-                osc.frequency.linearRampToValueAtTime(600, now + 0.1);
-                gainNode.gain.setValueAtTime(0.3, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.frequency.linearRampToValueAtTime(600, now + 0.15);
+                gainNode.gain.setValueAtTime(0.2, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
                 osc.start(now);
-                osc.stop(now + 0.1);
+                osc.stop(now + 0.15);
             } else if (type === 'break') {
                 osc.type = 'square';
                 osc.frequency.setValueAtTime(100, now);
                 osc.frequency.linearRampToValueAtTime(50, now + 0.1);
-                gainNode.gain.setValueAtTime(0.3, now);
+                gainNode.gain.setValueAtTime(0.2, now);
                 gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
                 osc.start(now);
                 osc.stop(now + 0.15);
@@ -250,14 +258,14 @@
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(400, now);
                 osc.frequency.exponentialRampToValueAtTime(50, now + 0.8);
-                gainNode.gain.setValueAtTime(0.5, now);
+                gainNode.gain.setValueAtTime(0.3, now);
                 gainNode.gain.linearRampToValueAtTime(0, now + 0.8);
                 osc.start(now);
                 osc.stop(now + 0.8);
             }
         }
 
-        // --- 控制輸入 ---
+        // --- 輸入控制 ---
         window.addEventListener('keydown', (e) => {
             const k = e.key.toLowerCase();
             if (k === 'arrowleft' || k === 'a') keys.left = true;
@@ -279,18 +287,13 @@
         btnLeft.addEventListener('touchend', (e) => { e.preventDefault(); handleTouch(btnLeft, false, 'left'); });
         btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); handleTouch(btnRight, true, 'right'); }, {passive: false});
         btnRight.addEventListener('touchend', (e) => { e.preventDefault(); handleTouch(btnRight, false, 'right'); });
-
+        
         btnLeft.addEventListener('mousedown', () => handleTouch(btnLeft, true, 'left'));
         btnLeft.addEventListener('mouseup', () => handleTouch(btnLeft, false, 'left'));
         btnLeft.addEventListener('mouseleave', () => handleTouch(btnLeft, false, 'left'));
         btnRight.addEventListener('mousedown', () => handleTouch(btnRight, true, 'right'));
         btnRight.addEventListener('mouseup', () => handleTouch(btnRight, false, 'right'));
         btnRight.addEventListener('mouseleave', () => handleTouch(btnRight, false, 'right'));
-
-        // --- 時間控制變數 (關鍵修改) ---
-        let lastTime = 0;
-        let accumulator = 0;
-        const TIME_STEP = 1000 / 60; // 強制每 16.66ms (60FPS) 執行一次物理
 
         function init() {
             canvas.width = canvas.clientWidth;
@@ -302,11 +305,11 @@
             player.vy = 0;
             score = 0;
             frames = 0;
-            gameSpeed = 2;
+            gameSpeed = 1.5; // 保持優化版的初始速度
             isGameOver = false;
             platforms = [];
             
-            // 重置時間計數器
+            // 重置時間累加器
             lastTime = performance.now();
             accumulator = 0;
 
@@ -349,6 +352,7 @@
             ctx.fillStyle = '#e74c3c';
             ctx.fillRect(player.x, player.y - 14, player.width, 6);
             ctx.fillRect(player.x + 4, player.y - 18, player.width - 8, 4);
+
             ctx.fillStyle = 'black';
             if (keys.left) ctx.fillRect(player.x + 4, player.y - 6, 2, 2);
             else if (keys.right) ctx.fillRect(player.x + 14, player.y - 6, 2, 2);
@@ -364,9 +368,11 @@
                 if (p.type === 'normal') ctx.fillStyle = '#2ecc71';
                 else if (p.type === 'bounce') ctx.fillStyle = '#f1c40f';
                 else if (p.type === 'fragile') ctx.fillStyle = '#e74c3c';
+
                 ctx.fillRect(p.x, p.y, p.width, p.height);
                 ctx.fillStyle = 'rgba(0,0,0,0.2)';
                 ctx.fillRect(p.x, p.y + p.height - 4, p.width, 4);
+                
                 if (p.type === 'bounce') {
                     ctx.fillStyle = '#fff';
                     ctx.fillRect(p.x + 10, p.y + 2, p.width - 20, 4);
@@ -395,24 +401,26 @@
 
         function update() {
             if (isGameOver) return;
-
             frames++;
+            
+            // 每 5 秒 (300幀) 增加一次速度
             if (frames % 300 === 0) {
-                gameSpeed += 0.2;
-                speedDisplay.innerText = (gameSpeed / 2).toFixed(1);
+                gameSpeed += 0.15; 
+                speedDisplay.innerText = (gameSpeed / 1.5).toFixed(1);
             }
             if (frames % 60 === 0) {
                 score++;
                 scoreEl.innerText = score;
             }
 
-            if (keys.left) player.vx = -player.speed;
-            else if (keys.right) player.vx = player.speed;
+            // 移動 (使用優化後的 MOVE_SPEED)
+            if (keys.left) player.vx = -MOVE_SPEED;
+            else if (keys.right) player.vx = MOVE_SPEED;
             else player.vx = 0;
 
             player.x += player.vx;
             player.y += player.vy;
-            player.vy += player.gravity;
+            player.vy += GRAVITY; // 使用優化後的 GRAVITY
 
             if (player.x + player.width < 0) player.x = canvas.width;
             if (player.x > canvas.width) player.x = -player.width;
@@ -420,8 +428,7 @@
             if (player.y > canvas.height) endGame();
             if (player.y < 15) endGame();
 
-            player.onGround = false;
-            
+            // 平台管理
             if (platforms.length > 0 && platforms[0].y + platforms[0].height < 0) {
                 platforms.shift();
             }
@@ -431,10 +438,12 @@
                 let pWidth = 70 + Math.random() * 30;
                 let pX = Math.random() * (canvas.width - pWidth);
                 let pY = canvas.height;
+                
                 let rand = Math.random();
                 let type = 'normal';
                 if (rand > 0.8) type = 'bounce';
                 else if (rand > 0.7) type = 'fragile';
+
                 platforms.push({
                     x: pX, y: pY, width: pWidth, height: 15, type: type, active: true
                 });
@@ -443,25 +452,26 @@
             platforms.forEach(p => {
                 if (!p.active) return;
                 p.y -= gameSpeed;
+
                 if (player.vy > 0 &&
-                    player.x + player.width > p.x + 5 &&
-                    player.x < p.x + p.width - 5 &&
+                    player.x + player.width > p.x + 2 &&
+                    player.x < p.x + p.width - 2 &&
                     player.y + player.height > p.y &&
-                    player.y + player.height < p.y + p.height + player.vy
+                    player.y + player.height < p.y + p.height + player.vy + 2
                    ) {
+                    
                     if (p.type === 'bounce') {
                         playSound('jump');
-                        player.vy = player.jumpForce;
+                        player.vy = JUMP_FORCE;
                     } else if (p.type === 'fragile') {
                         playSound('break');
                         player.y = p.y - player.height;
                         player.vy = -gameSpeed;
                         p.active = false;
-                        player.vy = -2; 
+                        player.vy = -1;
                     } else {
                         player.y = p.y - player.height;
                         player.vy = 0;
-                        player.onGround = true;
                     }
                 }
             });
@@ -476,6 +486,7 @@
         }
 
         // --- 改良後的遊戲迴圈 (Accumulator Pattern) ---
+        // 確保在所有設備上，邏輯每秒只執行 60 次
         function loop(currentTime) {
             gameLoopId = requestAnimationFrame(loop);
 
@@ -483,13 +494,12 @@
             let deltaTime = currentTime - lastTime;
             lastTime = currentTime;
 
-            // 防止切換分頁或卡頓時，時間累積過大導致死機 (最高處理 100ms，約 6 幀)
+            // 防止過度卡頓時累積太多
             if (deltaTime > 100) deltaTime = 100;
 
             accumulator += deltaTime;
 
             // 只要累積的時間超過 16.66ms，就執行一次 update
-            // 這保證了不管螢幕刷新率是 60, 120, 144, 邏輯都只跑 60FPS
             while (accumulator >= TIME_STEP) {
                 update();
                 accumulator -= TIME_STEP;
