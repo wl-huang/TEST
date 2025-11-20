@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>小朋友下樓梯 - 穩定幀率版</title>
+    <title>小朋友下樓梯 - 強制 60FPS 版</title>
     <style>
         body {
             margin: 0;
@@ -17,13 +17,13 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: white;
             overflow: hidden;
-            touch-action: none; /* 禁止手機瀏覽器預設的縮放與捲動 */
+            touch-action: none;
         }
 
         #game-container {
             position: relative;
             width: 100%;
-            max-width: 400px; /* 手機上滿版，電腦上限制寬度 */
+            max-width: 400px;
             height: 100%;
             max-height: 600px;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
@@ -39,7 +39,6 @@
             height: 100%;
         }
 
-        /* UI 層 */
         #ui-layer {
             position: absolute;
             top: 0;
@@ -61,7 +60,6 @@
             text-shadow: 1px 1px 2px black;
         }
 
-        /* 開始與結束畫面 */
         #start-screen, #game-over-screen {
             position: absolute;
             top: 0;
@@ -98,7 +96,6 @@
         
         .hidden { display: none !important; }
 
-        /* 虛擬按鍵 (手機用) */
         #touch-controls {
             position: absolute;
             bottom: 20px;
@@ -109,7 +106,7 @@
             justify-content: space-between;
             padding: 0 20px;
             box-sizing: border-box;
-            pointer-events: none; /* 容器不擋點擊，只有按鈕擋 */
+            pointer-events: none;
             z-index: 15;
         }
 
@@ -125,7 +122,7 @@
             justify-content: center;
             font-size: 30px;
             user-select: none;
-            -webkit-user-select: none; /* Safari */
+            -webkit-user-select: none;
             touch-action: manipulation;
         }
 
@@ -134,7 +131,6 @@
             transform: scale(0.95);
         }
 
-        /* 頂部尖刺 */
         .spikes {
             width: 100%;
             height: 15px;
@@ -193,28 +189,18 @@
         const gameOverScreen = document.getElementById('game-over-screen');
         const speedDisplay = document.getElementById('speed-display');
         
-        // 觸控按鈕
         const btnLeft = document.getElementById('btn-left');
         const btnRight = document.getElementById('btn-right');
 
-        // 遊戲變數
         let gameLoopId;
         let isGameOver = false;
         let score = 0;
         let frames = 0;
         let gameSpeed = 2;
         
-        // --- FPS 鎖定變數 ---
-        let lastTime = 0;
-        const FPS = 60;
-        const interval = 1000 / FPS;
+        const keys = { left: false, right: false };
 
-        const keys = {
-            left: false,
-            right: false
-        };
-
-        // 保留原始參數
+        // 原始參數 (未調整速度)
         const player = {
             x: 200, y: 100, width: 20, height: 30,
             vx: 0, vy: 0, speed: 5, jumpForce: -8,
@@ -223,7 +209,7 @@
 
         let platforms = [];
 
-        // --- 音效系統 (Web Audio API) ---
+        // --- 音效系統 ---
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         let audioCtx;
 
@@ -238,13 +224,10 @@
 
         function playSound(type) {
             if (!audioCtx) return;
-            
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
-            
             osc.connect(gainNode);
             gainNode.connect(audioCtx.destination);
-
             const now = audioCtx.currentTime;
 
             if (type === 'jump') {
@@ -255,8 +238,7 @@
                 gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
                 osc.start(now);
                 osc.stop(now + 0.1);
-            } 
-            else if (type === 'break') {
+            } else if (type === 'break') {
                 osc.type = 'square';
                 osc.frequency.setValueAtTime(100, now);
                 osc.frequency.linearRampToValueAtTime(50, now + 0.1);
@@ -264,8 +246,7 @@
                 gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
                 osc.start(now);
                 osc.stop(now + 0.15);
-            }
-            else if (type === 'gameover') {
+            } else if (type === 'gameover') {
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(400, now);
                 osc.frequency.exponentialRampToValueAtTime(50, now + 0.8);
@@ -296,17 +277,20 @@
 
         btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); handleTouch(btnLeft, true, 'left'); }, {passive: false});
         btnLeft.addEventListener('touchend', (e) => { e.preventDefault(); handleTouch(btnLeft, false, 'left'); });
-        
         btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); handleTouch(btnRight, true, 'right'); }, {passive: false});
         btnRight.addEventListener('touchend', (e) => { e.preventDefault(); handleTouch(btnRight, false, 'right'); });
 
         btnLeft.addEventListener('mousedown', () => handleTouch(btnLeft, true, 'left'));
         btnLeft.addEventListener('mouseup', () => handleTouch(btnLeft, false, 'left'));
         btnLeft.addEventListener('mouseleave', () => handleTouch(btnLeft, false, 'left'));
-        
         btnRight.addEventListener('mousedown', () => handleTouch(btnRight, true, 'right'));
         btnRight.addEventListener('mouseup', () => handleTouch(btnRight, false, 'right'));
         btnRight.addEventListener('mouseleave', () => handleTouch(btnRight, false, 'right'));
+
+        // --- 時間控制變數 (關鍵修改) ---
+        let lastTime = 0;
+        let accumulator = 0;
+        const TIME_STEP = 1000 / 60; // 強制每 16.66ms (60FPS) 執行一次物理
 
         function init() {
             canvas.width = canvas.clientWidth;
@@ -321,6 +305,10 @@
             gameSpeed = 2;
             isGameOver = false;
             platforms = [];
+            
+            // 重置時間計數器
+            lastTime = performance.now();
+            accumulator = 0;
 
             for (let i = 0; i < 6; i++) {
                 platforms.push({
@@ -334,9 +322,6 @@
             }
             scoreEl.innerText = score;
             speedDisplay.innerText = "1.0";
-            
-            // 重置時間戳
-            lastTime = performance.now();
         }
 
         function startGame() {
@@ -359,20 +344,15 @@
         function drawPlayer() {
             ctx.fillStyle = player.color;
             ctx.fillRect(player.x, player.y, player.width, player.height);
-            
             ctx.fillStyle = '#ffccaa';
             ctx.fillRect(player.x + 2, player.y - 10, player.width - 4, 12);
-            
             ctx.fillStyle = '#e74c3c';
             ctx.fillRect(player.x, player.y - 14, player.width, 6);
             ctx.fillRect(player.x + 4, player.y - 18, player.width - 8, 4);
-
             ctx.fillStyle = 'black';
-            if (keys.left) {
-                ctx.fillRect(player.x + 4, player.y - 6, 2, 2);
-            } else if (keys.right) {
-                ctx.fillRect(player.x + 14, player.y - 6, 2, 2);
-            } else {
+            if (keys.left) ctx.fillRect(player.x + 4, player.y - 6, 2, 2);
+            else if (keys.right) ctx.fillRect(player.x + 14, player.y - 6, 2, 2);
+            else {
                 ctx.fillRect(player.x + 5, player.y - 6, 2, 2);
                 ctx.fillRect(player.x + 13, player.y - 6, 2, 2);
             }
@@ -381,15 +361,12 @@
         function drawPlatforms() {
             platforms.forEach(p => {
                 if (!p.active) return;
-
                 if (p.type === 'normal') ctx.fillStyle = '#2ecc71';
                 else if (p.type === 'bounce') ctx.fillStyle = '#f1c40f';
                 else if (p.type === 'fragile') ctx.fillStyle = '#e74c3c';
-
                 ctx.fillRect(p.x, p.y, p.width, p.height);
                 ctx.fillStyle = 'rgba(0,0,0,0.2)';
                 ctx.fillRect(p.x, p.y + p.height - 4, p.width, 4);
-                
                 if (p.type === 'bounce') {
                     ctx.fillStyle = '#fff';
                     ctx.fillRect(p.x + 10, p.y + 2, p.width - 20, 4);
@@ -420,7 +397,6 @@
             if (isGameOver) return;
 
             frames++;
-            
             if (frames % 300 === 0) {
                 gameSpeed += 0.2;
                 speedDisplay.innerText = (gameSpeed / 2).toFixed(1);
@@ -455,34 +431,24 @@
                 let pWidth = 70 + Math.random() * 30;
                 let pX = Math.random() * (canvas.width - pWidth);
                 let pY = canvas.height;
-                
                 let rand = Math.random();
                 let type = 'normal';
                 if (rand > 0.8) type = 'bounce';
                 else if (rand > 0.7) type = 'fragile';
-
                 platforms.push({
-                    x: pX,
-                    y: pY,
-                    width: pWidth,
-                    height: 15,
-                    type: type,
-                    active: true
+                    x: pX, y: pY, width: pWidth, height: 15, type: type, active: true
                 });
             }
 
             platforms.forEach(p => {
                 if (!p.active) return;
-
                 p.y -= gameSpeed;
-
                 if (player.vy > 0 &&
                     player.x + player.width > p.x + 5 &&
                     player.x < p.x + p.width - 5 &&
                     player.y + player.height > p.y &&
                     player.y + player.height < p.y + p.height + player.vy
                    ) {
-                    
                     if (p.type === 'bounce') {
                         playSound('jump');
                         player.vy = player.jumpForce;
@@ -509,24 +475,29 @@
             drawTopSpikes();
         }
 
-        // --- 改為鎖定 FPS 的迴圈 ---
-        function loop(timestamp) {
+        // --- 改良後的遊戲迴圈 (Accumulator Pattern) ---
+        function loop(currentTime) {
             gameLoopId = requestAnimationFrame(loop);
-            
-            // 計算距離上一次更新過的時間
-            const deltaTime = timestamp - lastTime;
-            
-            // 只有當累積時間超過一幀的時間 (1000ms / 60 ≈ 16.6ms) 才執行更新
-            if (deltaTime >= interval) {
-                // 校正 lastTime，確保不會因為些微的時間誤差導致累積變慢
-                lastTime = timestamp - (deltaTime % interval);
-                
+
+            // 計算距離上次呼叫經過的時間
+            let deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            // 防止切換分頁或卡頓時，時間累積過大導致死機 (最高處理 100ms，約 6 幀)
+            if (deltaTime > 100) deltaTime = 100;
+
+            accumulator += deltaTime;
+
+            // 只要累積的時間超過 16.66ms，就執行一次 update
+            // 這保證了不管螢幕刷新率是 60, 120, 144, 邏輯都只跑 60FPS
+            while (accumulator >= TIME_STEP) {
                 update();
-                draw();
+                accumulator -= TIME_STEP;
             }
+            
+            draw();
         }
 
-        // 初始調整大小
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
         draw();
