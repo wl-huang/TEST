@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FocusType: Ranked Ladder</title>
+    <title>FocusType: PK (Ben, Quail, Teddy)</title>
     <style>
         :root {
             --bg-color: #f0f2f5;
@@ -96,7 +96,7 @@
 
         .lane-label {
             width: 100px;
-            font-size: 0.8rem;
+            font-size: 0.9rem;
             font-weight: bold;
             text-align: right;
             margin-right: 15px;
@@ -120,9 +120,9 @@
 
         /* Colors for Bots */
         .lane-user .lane-progress { background-color: var(--highlight); }
-        .lane-bot1 .lane-progress { background-color: #ef4444; } /* Rival Red */
-        .lane-bot2 .lane-progress { background-color: #f59e0b; } /* Rival Orange */
-        .lane-bot3 .lane-progress { background-color: #8b5cf6; } /* Rival Purple */
+        .lane-bot1 .lane-progress { background-color: #ef4444; } 
+        .lane-bot2 .lane-progress { background-color: #f59e0b; } 
+        .lane-bot3 .lane-progress { background-color: #8b5cf6; } 
 
         .lane-user .lane-label { color: var(--highlight); font-weight: 900; font-size: 0.9rem;}
 
@@ -188,11 +188,20 @@
 
         .rp-change {
             font-size: 3rem; font-weight: 900;
-            margin: 10px 0;
+            margin: 5px 0;
             text-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         .rp-plus { color: var(--correct); }
         .rp-minus { color: var(--error); }
+
+        .accuracy-note {
+            font-size: 0.9rem; font-weight: bold;
+            padding: 6px 15px; border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .acc-bonus { background: #d1fae5; color: #065f46; }
+        .acc-penalty { background: #fee2e2; color: #991b1b; }
+        .acc-fatal { background: #7f1d1d; color: #fecaca; border: 2px solid #991b1b; }
 
         .stats-row { display: flex; gap: 20px; margin-bottom: 20px; }
         .stat-mini { text-align: center; }
@@ -206,7 +215,6 @@
         }
         button.btn-primary:hover { background-color: #2563eb; }
 
-        /* Reset Button for Debug */
         .btn-reset {
             margin-top: 20px; font-size: 0.8rem; color: #999; background: none; border: none; cursor: pointer; text-decoration: underline;
         }
@@ -232,22 +240,22 @@
             <div class="lane-bar-bg"><div class="lane-progress" id="prog-user" style="width: 0%"></div></div>
         </div>
         <div class="race-lane lane-bot1">
-            <div class="lane-label" id="label-bot1">Bot 1</div>
+            <div class="lane-label" id="label-bot1">Ben</div>
             <div class="lane-bar-bg"><div class="lane-progress" id="prog-bot1" style="width: 0%"></div></div>
         </div>
         <div class="race-lane lane-bot2">
-            <div class="lane-label" id="label-bot2">Bot 2</div>
+            <div class="lane-label" id="label-bot2">Quail</div>
             <div class="lane-bar-bg"><div class="lane-progress" id="prog-bot2" style="width: 0%"></div></div>
         </div>
         <div class="race-lane lane-bot3">
-            <div class="lane-label" id="label-bot3">Bot 3</div>
+            <div class="lane-label" id="label-bot3">Teddy</div>
             <div class="lane-bar-bg"><div class="lane-progress" id="prog-bot3" style="width: 0%"></div></div>
         </div>
     </div>
 
     <div class="typing-area">
         <div class="live-stats">
-            <span id="progress-text">0 / 40</span>
+            <span id="progress-text">0 / 20</span>
             <span id="timer-text">00:00</span>
         </div>
 
@@ -260,6 +268,7 @@
             <div class="result-sub" id="res-sub">Calculating rank update...</div>
             
             <div class="rp-change" id="res-rp-change"></div>
+            <div id="res-acc-note" style="display:none;"></div>
 
             <div class="stats-row">
                 <div class="stat-mini">
@@ -281,7 +290,7 @@
 
     <script>
         // --- 1. Configuration ---
-        const SESSION_LENGTH = 40;
+        const SESSION_LENGTH = 20; // Updated to 20 words
         const wordPool = [
             "really", "family", "school", "always", "result", "change", "reason", "person", "moment", "father",
             "report", "course", "mother", "period", "center", "figure", "system", "better", "minute", "friend",
@@ -313,7 +322,6 @@
             { name: "Diamond", minRP: 2000, color: "var(--diamond)", baseWPM: 105 }
         ];
 
-        // --- 2. State Management ---
         let currentWords = [];
         let currentIndex = 0;
         let startTime = null;
@@ -325,17 +333,14 @@
         let bots = [];
         let botTimers = [];
 
-        // Persistent Data
-        let userRP = null; // null implies placement match needed
-
-        // --- 3. Logic ---
+        let userRP = null; 
 
         function loadUserData() {
             const storedRP = localStorage.getItem('focusType_RP');
             if (storedRP !== null) {
                 userRP = parseInt(storedRP, 10);
             } else {
-                userRP = null; // Trigger Placement Mode
+                userRP = null; 
             }
             updateRankDisplay();
         }
@@ -362,13 +367,13 @@
                 iconEl.innerText = "?";
                 nameEl.innerText = "PLACEMENT MATCH";
                 nameEl.style.color = "#555";
-                detailEl.innerText = "Play your first game to determine rank.";
+                detailEl.innerText = "Play 1 game to rank";
             } else {
                 iconEl.style.background = rank.color;
                 iconEl.innerText = rank.name[0];
                 nameEl.innerText = rank.name;
                 nameEl.style.color = rank.color;
-                detailEl.innerText = `${userRP} RP` + (rank.next !== "MAX" ? ` / ${rank.next} for Promotion` : " (Max Rank)");
+                detailEl.innerText = `${userRP} RP` + (rank.next !== "MAX" ? ` / ${rank.next} for Promotion` : "");
             }
         }
 
@@ -381,8 +386,6 @@
             return arr;
         }
 
-        // --- Game Lifecycle ---
-
         function initGame() {
             loadUserData();
             
@@ -394,16 +397,15 @@
             gameActive = false;
             if(timerInterval) clearInterval(timerInterval);
 
-            // UI Reset
             document.getElementById('type-input').value = '';
             document.getElementById('type-input').disabled = false;
             document.getElementById('type-input').focus();
             document.getElementById('type-input').classList.remove('input-error');
             document.getElementById('results-modal').classList.remove('visible');
+            document.getElementById('res-acc-note').style.display = 'none';
             document.getElementById('progress-text').innerText = `0 / ${SESSION_LENGTH}`;
             document.getElementById('timer-text').innerText = "00:00";
             
-            // Render Words
             const wb = document.getElementById('word-box');
             wb.innerHTML = '';
             currentWords.forEach((w, i) => {
@@ -414,7 +416,6 @@
             });
             wb.scrollTop = 0;
 
-            // Setup Bots
             setupBots();
         }
 
@@ -422,43 +423,36 @@
             botTimers.forEach(t => clearTimeout(t));
             botTimers = [];
             
-            // Reset bars
             ['user', 'bot1', 'bot2', 'bot3'].forEach(k => {
                 document.getElementById(`prog-${k}`).style.width = '0%';
             });
 
             let botSpeeds = [];
-            let labels = [];
+            // Ben, Quail, Teddy
+            // No WPM shown in labels anymore
+            const botNames = ["Ben", "Quail", "Teddy"];
 
             if (userRP === null) {
-                // PLACEMENT MODE: Fixed benchmarks
                 botSpeeds = [30, 50, 70]; 
-                labels = ["Novice", "Average", "Skilled"];
             } else {
-                // RANKED MODE: Based on Rank Points
-                // Formula: Target WPM = 20 + (RP / 25)
                 const ladderWPM = 20 + (userRP / 25);
-                
-                // Gatekeeper (0.85x), Rival (1.0x), Smurf (1.15x)
                 botSpeeds = [
                     Math.floor(ladderWPM * 0.85), 
                     Math.floor(ladderWPM * 1.0), 
                     Math.floor(ladderWPM * 1.15)
                 ];
-                labels = ["Gatekeeper", "Rival", "Smurf"];
             }
 
             bots = botSpeeds.map((wpm, i) => ({
                 id: `bot${i+1}`,
                 element: document.getElementById(`prog-bot${i+1}`),
-                wpm: Math.max(10, wpm), // Min 10 wpm
+                wpm: Math.max(10, wpm),
                 progress: 0,
                 finished: false
             }));
 
-            // Update labels
-            labels.forEach((lbl, i) => {
-                document.getElementById(`label-bot${i+1}`).innerText = `${lbl} (${bots[i].wpm} wpm)`;
+            botNames.forEach((name, i) => {
+                document.getElementById(`label-bot${i+1}`).innerText = name;
             });
         }
 
@@ -475,13 +469,10 @@
                 return;
             }
 
-            // Nonlinear Logic
             let baseDelay = 60000 / bot.wpm;
-            // Variance: 0.7x ~ 1.3x speed per word
             let variance = (Math.random() * 0.6) + 0.7; 
             let actualDelay = baseDelay * variance;
 
-            // Stumble: 10% chance to pause 1.5s
             if (Math.random() < 0.10) actualDelay += 1500;
 
             const tid = setTimeout(() => {
@@ -493,8 +484,6 @@
             
             botTimers.push(tid);
         }
-
-        // --- Inputs ---
 
         const inputEl = document.getElementById('type-input');
         
@@ -557,8 +546,6 @@
             }
         });
 
-        // --- Finish & Calculations ---
-
         function finishGame() {
             gameActive = false;
             clearInterval(timerInterval);
@@ -571,7 +558,6 @@
             const wpm = Math.round((totalChars / 5) / minutes);
             const accuracy = totalKeystrokes > 0 ? Math.round(((totalKeystrokes - totalMistakes)/totalKeystrokes)*100) : 0;
 
-            // Determine Rank
             let place = 1;
             bots.forEach(b => { if (b.progress >= SESSION_LENGTH) place++; });
 
@@ -582,20 +568,51 @@
             const titleEl = document.getElementById('res-title');
             const subEl = document.getElementById('res-sub');
             const rpChangeEl = document.getElementById('res-rp-change');
+            const accNoteEl = document.getElementById('res-acc-note');
 
             // UI Stats
-            document.getElementById('res-wpm').innerText = wpm;
             document.getElementById('res-acc').innerText = accuracy + "%";
             document.getElementById('res-rank').innerText = place;
+            
+            // Default WPM display
+            document.getElementById('res-wpm').innerText = wpm;
 
-            // LOGIC BRANCH: Placement vs Ranked
-            if (userRP === null) {
-                // === PLACEMENT MATCH LOGIC ===
-                // Rule: WPM * 0.8 -> Corresponding Rank Points
-                const calibratedWPM = Math.max(10, Math.floor(wpm * 0.8));
+            accNoteEl.style.display = 'none';
+            accNoteEl.className = 'accuracy-note';
+
+            // === FATAL ACCURACY CHECK (< 60%) ===
+            if (accuracy < 60) {
+                // Penalize regardless of placement or mode
+                if (userRP !== null) {
+                    userRP = Math.max(0, userRP - 60);
+                    localStorage.setItem('focusType_RP', userRP);
+                }
                 
-                // Formula Inverse: RP = (WPM - 20) * 25
-                // Example: 60 wpm -> 48 calibrated -> (48-20)*25 = 700 RP (Silver)
+                titleEl.innerText = "DISQUALIFIED";
+                titleEl.style.color = "var(--error)";
+                subEl.innerText = "Accuracy too low. Score invalid.";
+                
+                rpChangeEl.innerHTML = `<span class="rp-minus">-60 RP</span>`;
+                
+                // Hide WPM as requested ("不紀錄該次成績")
+                document.getElementById('res-wpm').innerText = "---";
+                document.getElementById('res-wpm').style.color = "#aaa";
+                
+                accNoteEl.innerText = "SUPER OUT OF CONTROL (< 60%)";
+                accNoteEl.classList.add('acc-fatal');
+                accNoteEl.style.display = 'inline-block';
+
+                document.getElementById('results-modal').classList.add('visible');
+                updateRankDisplay();
+                return; // STOP EXECUTION HERE
+            }
+
+            // === NORMAL FLOW ===
+
+            if (userRP === null) {
+                // Placement
+                const effectiveWPM = Math.floor(wpm * (accuracy / 100));
+                const calibratedWPM = Math.max(10, Math.floor(effectiveWPM * 0.8));
                 let newRP = Math.floor((calibratedWPM - 20) * 25);
                 if (newRP < 0) newRP = 0;
 
@@ -603,30 +620,50 @@
                 localStorage.setItem('focusType_RP', userRP);
 
                 titleEl.innerText = "Placement Complete!";
-                subEl.innerText = `Calibrated at ${calibratedWPM} WPM (80% of performance)`;
-                rpChangeEl.innerHTML = `<span style="color:var(--highlight); font-size:1.5rem;">Assigned: ${getRankInfo(userRP).name} (${userRP} RP)</span>`;
+                titleEl.style.color = "var(--highlight)";
+                subEl.innerText = `Speed ${wpm} x Acc ${accuracy}% = Effective ${calibratedWPM} WPM`;
+                rpChangeEl.innerHTML = `<span style="color:var(--highlight); font-size:1.5rem;">Rank: ${getRankInfo(userRP).name} (${userRP} RP)</span>`;
             
             } else {
-                // === RANKED MATCH LOGIC ===
+                // Ranked
                 let change = 0;
                 if (place === 1) change = 30;
                 else if (place === 2) change = 10;
                 else if (place === 3) change = -10;
                 else change = -30;
 
-                // Apply Change
-                userRP += change;
-                if (userRP < 0) userRP = 0; // Floor
+                // Accuracy Modifiers (Normal Range)
+                let accMod = 0;
+                let accText = "";
+                if (accuracy >= 95) {
+                    accMod = 5;
+                    accText = "High Precision Bonus +5 RP";
+                    accNoteEl.classList.add('acc-bonus');
+                } else if (accuracy < 90) {
+                    // Note: < 60 is handled above
+                    accMod = -10;
+                    accText = "Low Accuracy Penalty -10 RP";
+                    accNoteEl.classList.add('acc-penalty');
+                }
+
+                if(accText) {
+                    accNoteEl.innerText = accText;
+                    accNoteEl.style.display = 'inline-block';
+                }
+
+                let totalChange = change + accMod;
+                userRP += totalChange;
+                if (userRP < 0) userRP = 0; 
                 localStorage.setItem('focusType_RP', userRP);
 
-                // UI Text
                 titleEl.innerText = place <= 2 ? "Victory!" : "Defeat";
                 titleEl.style.color = place <= 2 ? "var(--correct)" : "var(--error)";
-                subEl.innerText = place <= 2 ? "Well done, climbing the ladder." : "Keep practicing to keep up.";
-
-                const sign = change > 0 ? "+" : "";
-                const colorClass = change >= 0 ? "rp-plus" : "rp-minus";
-                rpChangeEl.innerHTML = `<span class="${colorClass}">${sign}${change} RP</span>`;
+                
+                const sign = totalChange >= 0 ? "+" : "";
+                const colorClass = totalChange >= 0 ? "rp-plus" : "rp-minus";
+                
+                subEl.innerText = `(Rank ${change > 0 ? '+'+change : change} | Acc ${accMod > 0 ? '+'+accMod : accMod})`;
+                rpChangeEl.innerHTML = `<span class="${colorClass}">${sign}${totalChange} RP</span>`;
             }
 
             document.getElementById('results-modal').classList.add('visible');
