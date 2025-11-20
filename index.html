@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FocusType: PK (Ben, Quail, Teddy)</title>
+    <title>FocusType: King's Ladder</title>
     <style>
         :root {
             --bg-color: #f0f2f5;
@@ -20,6 +20,7 @@
             --gold: #f59e0b;
             --platinum: #06b6d4;
             --diamond: #8b5cf6;
+            --king: #e11d48; /* Rose Red for King */
         }
 
         * { box-sizing: border-box; }
@@ -53,18 +54,26 @@
             gap: 15px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.08);
             margin-top: 10px;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .rank-badge-container.is-king {
+            border-color: #fbbf24;
+            background: linear-gradient(to right, #fff1f2, #fff);
         }
 
         .rank-icon {
-            width: 40px; height: 40px;
+            width: 45px; height: 45px;
             border-radius: 50%;
             background: #ccc;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
+            font-weight: 900;
             color: white;
             font-size: 1.2rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
         .rank-info {
@@ -225,7 +234,7 @@
 
     <div class="header-section">
         <h1>FocusType <span style="color:var(--highlight)">Ranked</span></h1>
-        <div class="rank-badge-container" id="rank-display">
+        <div class="rank-badge-container" id="rank-badge-container">
             <div class="rank-icon" id="rank-icon">-</div>
             <div class="rank-info">
                 <div class="rank-title" id="rank-name">Placement</div>
@@ -290,7 +299,7 @@
 
     <script>
         // --- 1. Configuration ---
-        const SESSION_LENGTH = 20; // Updated to 20 words
+        const SESSION_LENGTH = 20;
         const wordPool = [
             "really", "family", "school", "always", "result", "change", "reason", "person", "moment", "father",
             "report", "course", "mother", "period", "center", "figure", "system", "better", "minute", "friend",
@@ -315,11 +324,12 @@
         ];
 
         const RANKS = [
-            { name: "Bronze", minRP: 0, color: "var(--bronze)", baseWPM: 25 },
-            { name: "Silver", minRP: 500, color: "var(--silver)", baseWPM: 45 },
-            { name: "Gold", minRP: 1000, color: "var(--gold)", baseWPM: 65 },
-            { name: "Platinum", minRP: 1500, color: "var(--platinum)", baseWPM: 85 },
-            { name: "Diamond", minRP: 2000, color: "var(--diamond)", baseWPM: 105 }
+            { name: "Bronze", minRP: 0, color: "var(--bronze)", baseWPM: 10, wpmRange: 30, rpRange: 200 },   // 0-199 RP, 10-40 WPM
+            { name: "Silver", minRP: 200, color: "var(--silver)", baseWPM: 40, wpmRange: 30, rpRange: 200 }, // 200-399 RP, 40-70 WPM
+            { name: "Gold", minRP: 400, color: "var(--gold)", baseWPM: 70, wpmRange: 30, rpRange: 200 },     // 400-599 RP, 70-100 WPM
+            { name: "Platinum", minRP: 600, color: "var(--platinum)", baseWPM: 100, wpmRange: 20, rpRange: 200 }, // 600-799 RP, 100-120 WPM
+            { name: "Diamond", minRP: 800, color: "var(--diamond)", baseWPM: 120, wpmRange: 20, rpRange: 200 },   // 800-999 RP, 120-140 WPM
+            { name: "King", minRP: 1000, color: "var(--king)", baseWPM: 141, wpmRange: 50, rpRange: 1000 }        // 1000+, 141+
         ];
 
         let currentWords = [];
@@ -332,8 +342,27 @@
         
         let bots = [];
         let botTimers = [];
-
         let userRP = null; 
+
+        // --- Helper: Calculate Ladder WPM based on RP ---
+        function getLadderWPM(rp) {
+            if (rp < 200) return 10 + (rp / 200) * 30; // Bronze
+            if (rp < 400) return 40 + ((rp - 200) / 200) * 30; // Silver
+            if (rp < 600) return 70 + ((rp - 400) / 200) * 30; // Gold
+            if (rp < 800) return 100 + ((rp - 600) / 200) * 20; // Plat
+            if (rp < 1000) return 120 + ((rp - 800) / 200) * 20; // Diamond
+            return 141 + ((rp - 1000) / 100) * 10; // King (slow scaling)
+        }
+
+        // --- Helper: Calculate RP based on WPM (Inverse for Placement) ---
+        function getRPFromWPM(wpm) {
+            if (wpm < 40) return ((wpm - 10) / 30) * 200; // Bronze
+            if (wpm < 70) return 200 + ((wpm - 40) / 30) * 200; // Silver
+            if (wpm < 100) return 400 + ((wpm - 70) / 30) * 200; // Gold
+            if (wpm < 120) return 600 + ((wpm - 100) / 20) * 200; // Plat
+            if (wpm < 140) return 800 + ((wpm - 120) / 20) * 200; // Diamond
+            return 1000; // King Cap for placement
+        }
 
         function loadUserData() {
             const storedRP = localStorage.getItem('focusType_RP');
@@ -358,9 +387,13 @@
 
         function updateRankDisplay() {
             const rank = getRankInfo(userRP);
+            const containerEl = document.getElementById('rank-badge-container');
             const iconEl = document.getElementById('rank-icon');
             const nameEl = document.getElementById('rank-name');
             const detailEl = document.getElementById('rank-details');
+
+            // Reset special class
+            containerEl.classList.remove('is-king');
 
             if (userRP === null) {
                 iconEl.style.background = "#555";
@@ -370,10 +403,16 @@
                 detailEl.innerText = "Play 1 game to rank";
             } else {
                 iconEl.style.background = rank.color;
-                iconEl.innerText = rank.name[0];
+                iconEl.innerText = rank.name === "King" ? "K" : rank.name[0];
                 nameEl.innerText = rank.name;
                 nameEl.style.color = rank.color;
-                detailEl.innerText = `${userRP} RP` + (rank.next !== "MAX" ? ` / ${rank.next} for Promotion` : "");
+                
+                if(rank.name === "King") {
+                    containerEl.classList.add('is-king');
+                    detailEl.innerText = `${userRP} RP (Legendary)`;
+                } else {
+                    detailEl.innerText = `${userRP} RP` + (rank.next !== "MAX" ? ` / ${rank.next} for Promotion` : "");
+                }
             }
         }
 
@@ -428,14 +467,14 @@
             });
 
             let botSpeeds = [];
-            // Ben, Quail, Teddy
-            // No WPM shown in labels anymore
             const botNames = ["Ben", "Quail", "Teddy"];
 
             if (userRP === null) {
-                botSpeeds = [30, 50, 70]; 
+                // FIXED PLACEMENT SPEEDS
+                botSpeeds = [15, 30, 45]; 
             } else {
-                const ladderWPM = 20 + (userRP / 25);
+                // RANKED MODE
+                const ladderWPM = getLadderWPM(userRP);
                 botSpeeds = [
                     Math.floor(ladderWPM * 0.85), 
                     Math.floor(ladderWPM * 1.0), 
@@ -446,7 +485,7 @@
             bots = botSpeeds.map((wpm, i) => ({
                 id: `bot${i+1}`,
                 element: document.getElementById(`prog-bot${i+1}`),
-                wpm: Math.max(10, wpm),
+                wpm: Math.max(5, wpm), // Safety floor
                 progress: 0,
                 finished: false
             }));
@@ -573,8 +612,6 @@
             // UI Stats
             document.getElementById('res-acc').innerText = accuracy + "%";
             document.getElementById('res-rank').innerText = place;
-            
-            // Default WPM display
             document.getElementById('res-wpm').innerText = wpm;
 
             accNoteEl.style.display = 'none';
@@ -582,7 +619,6 @@
 
             // === FATAL ACCURACY CHECK (< 60%) ===
             if (accuracy < 60) {
-                // Penalize regardless of placement or mode
                 if (userRP !== null) {
                     userRP = Math.max(0, userRP - 60);
                     localStorage.setItem('focusType_RP', userRP);
@@ -590,59 +626,55 @@
                 
                 titleEl.innerText = "DISQUALIFIED";
                 titleEl.style.color = "var(--error)";
-                subEl.innerText = "Accuracy too low. Score invalid.";
+                subEl.innerText = "Accuracy < 60%. Score invalid.";
                 
                 rpChangeEl.innerHTML = `<span class="rp-minus">-60 RP</span>`;
                 
-                // Hide WPM as requested ("不紀錄該次成績")
                 document.getElementById('res-wpm').innerText = "---";
                 document.getElementById('res-wpm').style.color = "#aaa";
                 
-                accNoteEl.innerText = "SUPER OUT OF CONTROL (< 60%)";
+                accNoteEl.innerText = "SUPER OUT OF CONTROL";
                 accNoteEl.classList.add('acc-fatal');
                 accNoteEl.style.display = 'inline-block';
 
                 document.getElementById('results-modal').classList.add('visible');
                 updateRankDisplay();
-                return; // STOP EXECUTION HERE
+                return;
             }
 
             // === NORMAL FLOW ===
 
             if (userRP === null) {
-                // Placement
-                const effectiveWPM = Math.floor(wpm * (accuracy / 100));
-                const calibratedWPM = Math.max(10, Math.floor(effectiveWPM * 0.8));
-                let newRP = Math.floor((calibratedWPM - 20) * 25);
-                if (newRP < 0) newRP = 0;
-
-                userRP = newRP;
+                // Placement Calculation using new segments
+                const effectiveWPM = Math.floor(wpm * (accuracy / 100) * 0.8);
+                const calculatedRP = Math.floor(getRPFromWPM(effectiveWPM));
+                
+                userRP = Math.max(0, calculatedRP);
                 localStorage.setItem('focusType_RP', userRP);
 
                 titleEl.innerText = "Placement Complete!";
                 titleEl.style.color = "var(--highlight)";
-                subEl.innerText = `Speed ${wpm} x Acc ${accuracy}% = Effective ${calibratedWPM} WPM`;
+                subEl.innerText = `Effective WPM: ${effectiveWPM} (Initial Calib)`;
                 rpChangeEl.innerHTML = `<span style="color:var(--highlight); font-size:1.5rem;">Rank: ${getRankInfo(userRP).name} (${userRP} RP)</span>`;
             
             } else {
-                // Ranked
+                // Ranked Calculation
                 let change = 0;
                 if (place === 1) change = 30;
                 else if (place === 2) change = 10;
                 else if (place === 3) change = -10;
                 else change = -30;
 
-                // Accuracy Modifiers (Normal Range)
+                // Accuracy Modifiers
                 let accMod = 0;
                 let accText = "";
                 if (accuracy >= 95) {
                     accMod = 5;
-                    accText = "High Precision Bonus +5 RP";
+                    accText = "High Precision +5 RP";
                     accNoteEl.classList.add('acc-bonus');
                 } else if (accuracy < 90) {
-                    // Note: < 60 is handled above
                     accMod = -10;
-                    accText = "Low Accuracy Penalty -10 RP";
+                    accText = "Low Accuracy -10 RP";
                     accNoteEl.classList.add('acc-penalty');
                 }
 
@@ -662,7 +694,7 @@
                 const sign = totalChange >= 0 ? "+" : "";
                 const colorClass = totalChange >= 0 ? "rp-plus" : "rp-minus";
                 
-                subEl.innerText = `(Rank ${change > 0 ? '+'+change : change} | Acc ${accMod > 0 ? '+'+accMod : accMod})`;
+                subEl.innerText = `(Place ${change > 0 ? '+'+change : change} | Acc ${accMod > 0 ? '+'+accMod : accMod})`;
                 rpChangeEl.innerHTML = `<span class="${colorClass}">${sign}${totalChange} RP</span>`;
             }
 
@@ -677,7 +709,6 @@
             }
         }
 
-        // Start
         window.onload = initGame;
 
     </script>
